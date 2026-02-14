@@ -1,99 +1,76 @@
-import { dbService, OTP, USER } from '../../DB/index.js';
 import {
-  ApiError,
-  asymmetric,
-  hashSecurity,
-  mailService,
-  otpTypes,
-  pages,
-} from '../../utils/index.js';
+  generateKeyPairSync,
+  constants,
+  publicEncrypt,
+  privateDecrypt,
+} from 'crypto';
+import { resolve } from 'path';
+import fs from 'fs/promises';
+let publicKey;
+let privateKey;
+export const runForFirstTime = async () => {
+  try {
+    const { publicKey, privateKey } = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+    });
+    await fs.mkdir(resolve('./src/config/security'), { recursive: true });
+    await fs.writeFile(
+      resolve('./src/config/security/public.bem'),
+      publicKey.export({ type: 'pkcs1', format: 'pem' }),
+      { flag: 'wx' },
+    );
+    await fs.writeFile(
+      resolve('./src/config/security/private.bem'),
+      privateKey.export({ type: 'pkcs1', format: 'pem' }),
+      { flag: 'wx' },
+    );
 
-export const signup = async (data) => {
-  const { firstName, lastName, email, password, cPassword, phone } = data;
-
-  const exists = await dbService.findOneDoc(USER, { filter: { email } });
-  console.log(email, exists);
-
-  if (exists) {
-    throw new ApiError('this email already exists', 409);
+    console.log('files created successfully');
+  } catch (e) {
+    if (e.code === 'EEXIST') {
+      console.log('files already exists skipping....');
+    }
   }
-  if (cPassword !== password) {
-    throw new ApiError("confirm password doesn't match password", 400);
-  }
-  const expireTime = new Date(Date.now() + 10 * 60 * 1000);
-
-  const otp = Math.floor(100000 + Math.random() * 900000);
-  console.log('otp : ', otp);
-  //el hash by7sl f el pre save w el encryption by7sl f el phone f el pre save
-  const user = await dbService.createDoc(USER, {
-    data: {
-      firstName,
-      lastName,
-      email,
-      password,
-      phone,
-      expireAt: expireTime,
-    },
-  });
-  await dbService.createDoc(OTP, {
-    data: {
-      otpType: otpTypes.confirmEmail,
-      otp,
-      userId: user._id,
-      expireAt: expireTime,
-    },
-  });
-  await mailService.sendOTP(
-    email,
-    'Confirm Your Email',
-    'Your OTP',
-    pages.otpPage(otp),
-  );
+  publicKey = await fs.readFile(resolve('./src/config/security/public.bem'));
+  privateKey = await fs.readFile(resolve('./src/config/security/private.bem'));
 };
-export const confirmAccount = async (data) => {
-  const { email, otp } = data;
-  const user = await dbService.findOneDoc(USER, { filter: { email } });
-  if (!user) {
-    throw new ApiError('email not found', 404);
+
+////////////////////////////
+
+/////////////////////////////////////////
+export const Encryption = async (data) => {
+  try {
+    if (!privateKey) {
+      throw new Error('private key not found');
+    }
+    const encrypted = publicEncrypt(
+      {
+        key: publicKey,
+        padding: constants.RSA_PKCS1_OAEP_PADDING,
+      },
+      Buffer.from(data),
+    );
+    return encrypted.toString('base64');
+  } catch (e) {
+    `Decryption failed: ${e.message}`;
   }
-  const otpDoc = await dbService.findOneDoc(OTP, {
-    filter: { userId: user._id, otpType: otpTypes.confirmEmail },
-  });
-  if (!otpDoc) {
-    throw new ApiError('invalid OTP ', 400);
-  }
-  const decryptedOTP = await hashSecurity.checkHash(otp, otpDoc.otp, 'bcrypt');
-  if (!decryptedOTP) {
-    throw new ApiError('invalid OTP ', 400);
-  }
-  await dbService.deleteOneDoc(OTP, { filter: { _id: otpDoc._id } });
-  await dbService.updateOneDoc(USER, {
-    filter: { _id: user._id },
-    update: {
-      isConfirmed: true,
-      $unset: { expireAt: '' },
-    },
-  });
 };
-export const login = async (data) => {
-  const { email, password } = data;
-  const user = await dbService.findOneDoc(USER, { filter: { email } });
-
-  if (!user) {
-    throw new ApiError('invalid email or password', 401);
+//////////////////////////////////////////////
+export const Decryption = async (encryptedData) => {
+  try {
+    if (!publicKey) {
+      throw new Error('public key not found');
+    }
+    const buffer = Buffer.from(encryptedData, 'base64');
+    const decrypted = privateDecrypt(
+      {
+        key: privateKey,
+        padding: constants.RSA_PKCS1_OAEP_PADDING,
+      },
+      buffer,
+    );
+    return decrypted.toString('utf8');
+  } catch (e) {
+    console.log(`Decryption failed: ${e.message}`);
   }
-  if (!user.isConfirmed) {
-    throw new ApiError('please confirm your email first', 403);
-  }
-  const checkPassword = await hashSecurity.checkHash(
-    password,
-    user.password,
-    'argon',
-  );
-
-  if (!checkPassword) {
-    throw new ApiError('invalid email or password', 401);
-  }
-  const token = await user.generateToken();
-  return token;
 };
