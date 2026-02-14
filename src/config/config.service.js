@@ -1,0 +1,12 @@
+import { config } from 'dotenv';
+import { resolve } from 'path';
+config({ path: resolve('./src/config/.env') });
+export const PORT = process.env.PORT || 5000;
+export const NODE_ENV = process.env.NODE_ENV;
+export const MONGOOSE_URI = process.env.MONGOOSE_URI;
+export const DB_NAME = process.env.DB_NAME;
+export const SALT = +process.env.SALT;
+export const CONSUMER_SECRET = process.env.CONSUMER_SECRET;
+export const CONSUMER_KEY = process.env.CONSUMER_KEY;
+export const MY_EMAIL = process.env.MY_EMAIL;
+export const JWT_SECRET = process.env.JWT_SECRET;
