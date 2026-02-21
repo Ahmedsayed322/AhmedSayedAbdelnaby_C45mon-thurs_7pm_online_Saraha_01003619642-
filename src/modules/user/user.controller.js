@@ -6,7 +6,7 @@ import { authentication } from '../../middlewares/auth/user.auth.js';
 const router = Router();
 router.post('/signup', async (req, res, next) => {
   console.log(req.body);
-  
+
   console.log('signup being called....');
   const user = await signup(req.body);
   return successResponse(res, {
@@ -26,12 +26,11 @@ router.patch('/confirm-email', async (req, res, next) => {
 router.post('/signin', async (req, res, next) => {
   console.log('sign being called....');
   const token = await login(req.body);
-  setTimeout(() => {
-    return successResponse(res, {
-      message: 'user logged in',
-      statusCode: 201,
-      data: { token },
-    },5000);
+
+  return successResponse(res, {
+    message: 'user logged in',
+    statusCode: 201,
+    data: { token },
   });
 });
 router.get('/profile', authentication, async (req, res, next) => {
