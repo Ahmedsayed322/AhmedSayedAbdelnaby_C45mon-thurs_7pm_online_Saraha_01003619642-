@@ -10,3 +10,4 @@ export const CONSUMER_SECRET = process.env.CONSUMER_SECRET;
 export const CONSUMER_KEY = process.env.CONSUMER_KEY;
 export const MY_EMAIL = process.env.MY_EMAIL;
 export const JWT_SECRET = process.env.JWT_SECRET;
+export const CLIENT_IDS = process.env.CLIENT_IDS.split(',');

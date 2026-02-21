@@ -4,6 +4,7 @@ import {
   hashSecurity,
   asymmetric,
   ApiError,
+  authEnum,
 } from '../../utils/index.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/index.js';
@@ -28,9 +29,12 @@ const userSchema = new Schema(
         'invalid email format',
       ],
     },
+
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return this.provider == provider.sys;
+      },
       minLength: [8, 'password length should be more than 8'],
       validate: {
         validator: function (val) {
@@ -43,9 +47,9 @@ const userSchema = new Schema(
     },
     phone: {
       type: String,
-      required: true,
       match: [
-        /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/,
+        /^\+?[1-9]\d{7,14}$/,
+        // /^[\+]?[(]?[0-9]{3}[)]?[-\s\.]?[0-9]{3}[-\s\.]?[0-9]{4,6}$/,
         'invalid phone number',
       ],
     },
@@ -58,8 +62,16 @@ const userSchema = new Schema(
       type: Boolean,
       enum: [true],
     },
+    role: {
+      type: String,
+      enum: Object.values(authEnum),
+      default: authEnum.user,
+    },
     expireAt: {
       type: Date,
+    },
+    profilePic: {
+      type: String,
     },
   },
 

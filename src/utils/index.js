@@ -3,6 +3,7 @@ export { default as successResponse } from './response/response.success.js';
 export { default as failResponse } from './response/response.error.js';
 export { default as provider } from './enum/provider.enum.js';
 export { default as otpTypes } from './enum/otp.enum.js';
+export { default as authEnum } from './enum/auth.enum.js';
 export * as hashSecurity from './security/hash.security.js';
 export * as mailService from './smtp/nodemailer.service.js';
 export * as pages from './ui/ui.service.js';

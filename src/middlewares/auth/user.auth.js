@@ -43,7 +43,10 @@ export const authentication = async (req, res, next) => {
       statusCode: 401,
     });
   }
-  user.phone = await asymmetric.Decryption(user.phone);
+  if (user.phone) {
+    user.phone = await asymmetric.Decryption(user.phone);
+  }
+
   req.user = user;
   next();
 };
