@@ -1,3 +1,12 @@
 node_modules/
+
+# Sensitive config
 src/config/security/
 src/config/.env
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
