@@ -7,6 +7,8 @@ import { failResponse } from "../../utils/index.js";
 export const Validation = (val) => {
   return (req, res, next) => {
     const keys = Object.keys(val.describe().keys);
+    console.log(keys);
+    
     const errors = [];
     for (let key of keys) {
       const subSchema = val.extract(key);

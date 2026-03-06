@@ -13,13 +13,13 @@ const userSchema = new Schema(
     firstName: {
       type: String,
       required: true,
-      minLength:3,
+      minLength: 3,
       trim: true,
     },
     lastName: {
       type: String,
       required: true,
-      minLength:3,
+      minLength: 3,
       trim: true,
     },
     email: {
@@ -72,8 +72,12 @@ const userSchema = new Schema(
     expireAt: {
       type: Date,
     },
+    // profilePic: {
+    //   type: String,
+    // },
     profilePic: {
-      type: String,
+      public_id: { type: String },
+      secure_url: { type: String },
     },
   },
 
@@ -104,11 +108,15 @@ userSchema.pre('save', async function () {
     this.phone = await asymmetric.Encryption(this.phone);
   }
 });
-userSchema.methods.generateToken = async function () {
+userSchema.methods.generateToken = async function (type) {
   const { JWT_SECRET } = env;
-  const token = await jwt.sign({ id: this._id }, JWT_SECRET, {
-    expiresIn: '7d',
-  });
+  const token = await jwt.sign(
+    { id: this._id },
+    type === 'access' ? JWT_SECRET : 'refresh secret',
+    {
+      expiresIn: type === 'access' ? '30m' : '7d',
+    },
+  );
   return token;
 };
 const USER = model('user', userSchema);

@@ -11,3 +11,6 @@ export const CONSUMER_KEY = process.env.CONSUMER_KEY;
 export const MY_EMAIL = process.env.MY_EMAIL;
 export const JWT_SECRET = process.env.JWT_SECRET;
 export const CLIENT_IDS = process.env.CLIENT_IDS.split(',');
+export const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
+export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;

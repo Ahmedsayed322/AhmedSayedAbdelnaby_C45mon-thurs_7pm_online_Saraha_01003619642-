@@ -10,6 +10,9 @@ export const deleteOneDoc = async (model, { filter = {}, options }) => {
 export const findDocById = async (model, { id, select = {} }) => {
   return await model.findById(id).select(select);
 };
-export const updateOneDoc = async (model, { filter = {}, options, update={} }) => {
+export const updateOneDoc = async (
+  model,
+  { filter = {}, update = {}, options },
+) => {
   return await model.updateOne(filter, update, options);
 };

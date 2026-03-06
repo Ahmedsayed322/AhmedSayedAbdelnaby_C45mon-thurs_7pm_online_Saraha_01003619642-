@@ -28,7 +28,7 @@ export const authentication = async (req, res, next) => {
   const decoded = jwt.verify(token, JWT_SECRET);
   const user = await dbService.findDocById(USER, {
     id: decoded.id,
-    select: ['-password', '-__v', '-createdAt', '-updatedAt'],
+    select: [ '-__v', '-createdAt', '-updatedAt'],
   });
 
   if (!user) {

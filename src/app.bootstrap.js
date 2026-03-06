@@ -8,7 +8,7 @@ import { resolve } from "path";
 import cors from "cors";
 const bootstrap = async () => {
   const app = express();
-  app.use(express.urlencoded({ extended: true }));
+  
   const { PORT } = env;
   await connectDb();
   asymmetric.runForFirstTime();
@@ -23,7 +23,7 @@ const bootstrap = async () => {
 
   app.use("/users", userRouter);
   app.use(KnownErrorHandler, GlobalErrorHandler);
-  app.use("/uploads/profilePics", express.static(resolve("uploads/profilePics")));
+  app.use("/uploads", express.static(resolve("uploads")));
   app.use("{/dummy}", (req, res, next) => {
     res.status(404).json({ message: `this ${req.originalUrl} is not exist` });
   });
