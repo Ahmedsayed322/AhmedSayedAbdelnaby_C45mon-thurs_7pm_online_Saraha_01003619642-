@@ -8,6 +8,7 @@ import {
 } from '../../utils/index.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/index.js';
+
 const userSchema = new Schema(
   {
     firstName: {
@@ -109,10 +110,10 @@ userSchema.pre('save', async function () {
   }
 });
 userSchema.methods.generateToken = async function (type) {
-  const { JWT_SECRET } = env;
+  const { JWT_SECRET, REFRESH_TOKEN_SECRET } = env;
   const token = await jwt.sign(
     { id: this._id },
-    type === 'access' ? JWT_SECRET : 'refresh secret',
+    type === 'access' ? JWT_SECRET : REFRESH_TOKEN_SECRET,
     {
       expiresIn: type === 'access' ? '30m' : '7d',
     },

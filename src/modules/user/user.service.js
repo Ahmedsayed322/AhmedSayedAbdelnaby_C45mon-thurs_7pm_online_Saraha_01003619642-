@@ -18,6 +18,7 @@ import {
   Encryption,
 } from '../../utils/security/asymmetricEncryption.security.js';
 
+
 export const signup = async (req) => {
   const { firstName, lastName, email, password, phone } = req.body;
 
@@ -183,7 +184,7 @@ export const uploadPic = async (req) => {
   await req.user.save();
 };
 export const refreshToken = async ({ refreshToken }) => {
-  const payload = await jwt.verify(refreshToken, 'refresh secret');
+  const payload = await jwt.verify(refreshToken, env.REFRESH_TOKEN_SECRET);
   const user = await dbService.findOneDoc(USER, {
     filter: { _id: payload.id },
   });
