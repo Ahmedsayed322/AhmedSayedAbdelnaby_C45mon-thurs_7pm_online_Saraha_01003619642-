@@ -1,5 +1,16 @@
 import Joi from 'joi';
-
+const fileSchema = Joi.object({
+  fieldname: Joi.string().required().messages({
+    'any.required': 'file is required',
+  }),
+  originalname: Joi.string().required(),
+  encoding: Joi.string().required(),
+  mimetype: Joi.string().required(),
+  size: Joi.number().integer().min(1).required(),
+  destination: Joi.string().required(),
+  filename: Joi.string().required(),
+  path: Joi.string().required(),
+});
 export const signupValidation = Joi.object({
   body: Joi.object({
     firstName: Joi.string()
@@ -81,19 +92,7 @@ export const refreshTokenValidation = Joi.object({
   }).required(),
 });
 export const uploadProfilePicValidation = Joi.object({
-  file: Joi.object({
-    fieldname: Joi.string().valid('profile').required().messages({
-      'any.only': 'file fieldname must be profile',
-      'any.required': 'file is required',
-    }),
-    originalname: Joi.string().required(),
-    encoding: Joi.string().required(),
-    mimetype: Joi.string().required(),
-    size: Joi.number().integer().min(1).required(),
-    destination: Joi.string().required(),
-    filename: Joi.string().required(),
-    path: Joi.string().required(),
-  })
+  file: fileSchema
     .required()
     .messages({
       'any.required': 'file is required',
@@ -147,4 +146,11 @@ export const updatePasswordValidation = Joi.object({
         'any.required': 'confirm password is required',
       }),
   }).required(),
+});
+export const getVisitCountValidation = shareProfileValidation;
+export const coverPicsValidation = Joi.object({
+  files: Joi.array().items(fileSchema).max(2).min(1).required().messages({
+    'array.max': 'max number of files is 2',
+    'array.min': 'min number of files is 1',
+  }),
 });

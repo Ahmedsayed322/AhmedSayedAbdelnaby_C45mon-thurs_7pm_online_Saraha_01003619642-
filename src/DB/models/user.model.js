@@ -3,7 +3,6 @@ import {
   provider,
   hashSecurity,
   asymmetric,
-  ApiError,
   authEnum,
 } from '../../utils/index.js';
 import jwt from 'jsonwebtoken';
@@ -61,17 +60,10 @@ const userSchema = new Schema(
       enum: Object.values(provider),
       default: provider.sys,
     },
-    isConfirmed: {
-      type: Boolean,
-      enum: [true],
-    },
     role: {
       type: String,
       enum: Object.values(authEnum),
       default: authEnum.user,
-    },
-    expireAt: {
-      type: Date,
     },
     // profilePic: {
     //   type: String,
@@ -79,6 +71,25 @@ const userSchema = new Schema(
     profilePic: {
       public_id: { type: String },
       secure_url: { type: String },
+    },
+    changeCredentials: {
+      type: Date,
+    },
+    gallery: [
+      {
+        public_id: { type: String },
+        secure_url: { type: String },
+      },
+    ],
+    coverPics: [
+      {
+        public_id: { type: String },
+        secure_url: { type: String },
+      },
+    ],
+    visitCount: {
+      type: Number,
+      default: 0,
     },
   },
 
@@ -88,7 +99,7 @@ const userSchema = new Schema(
     strictQuery: true,
   },
 );
-userSchema.index({ expireAt: 1 }, { expireAfterSeconds: 0 });
+
 userSchema
   .virtual('fullName')
   .get(function () {
@@ -109,13 +120,14 @@ userSchema.pre('save', async function () {
     this.phone = await asymmetric.Encryption(this.phone);
   }
 });
-userSchema.methods.generateToken = async function (type) {
+userSchema.methods.generateToken = async function (type, tokenId) {
   const { JWT_SECRET, REFRESH_TOKEN_SECRET } = env;
   const token = await jwt.sign(
     { id: this._id },
     type === 'access' ? JWT_SECRET : REFRESH_TOKEN_SECRET,
     {
       expiresIn: type === 'access' ? '30m' : '7d',
+      jwtid: tokenId,
     },
   );
   return token;

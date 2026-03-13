@@ -2,19 +2,26 @@ import { Router } from 'express';
 import { successResponse } from '../../utils/index.js';
 import {
   confirmAccount,
+  getViewCount,
   GmailSignUp,
   login,
+  logout,
   refreshToken,
+  removeProfilePicture,
   shareProfile,
   signup,
   updatePassword,
   updateProfile,
+  uploadCoverPics,
   uploadPic,
+  userProfile,
 } from './user.service.js';
 import { authentication } from '../../middlewares/auth/user.auth.js';
 import { Validation } from '../../middlewares/validation/validation.js';
 import {
   confirmEmailValidation,
+  coverPicsValidation,
+  getVisitCountValidation,
   googleSigninValidation,
   loginValidation,
   refreshTokenValidation,
@@ -28,6 +35,7 @@ import {
   fileUploader,
   fileUploader_cloudinary,
 } from '../../middlewares/upload/multer.js';
+import { authorization } from '../../middlewares/auth/user.author.js';
 
 const router = Router();
 router.post(
@@ -67,10 +75,11 @@ router.post('/signin', Validation(loginValidation), async (req, res, next) => {
 });
 router.get('/profile', authentication, async (req, res, next) => {
   console.log('profile being called....');
+  const profile = await userProfile(req.user);
   return successResponse(res, {
     message: 'user logged in',
     statusCode: 201,
-    data: { user: req.user },
+    data: { user: profile },
   });
 });
 router.post(
@@ -101,18 +110,14 @@ router.post(
     });
   },
 );
-router.post(
-  '/refresh-token',
-  Validation(refreshTokenValidation),
-  async (req, res, next) => {
-    const token = await refreshToken(req.body);
-    return successResponse(res, {
-      message: 'token refreshed successfully',
-      statusCode: 200,
-      data: { accessToken: token },
-    });
-  },
-);
+router.post('/refresh-token', authentication, async (req, res, next) => {
+  const token = await refreshToken(req);
+  return successResponse(res, {
+    message: 'token refreshed successfully',
+    statusCode: 200,
+    data: { accessToken: token },
+  });
+});
 router.get(
   '/share-profile/:id',
   Validation(shareProfileValidation),
@@ -148,6 +153,47 @@ router.patch(
       message: 'password updated successfully',
       statusCode: 200,
       data: { user },
+    });
+  },
+);
+router.delete('/logout', authentication, async (req, res, next) => {
+  await logout(req);
+  return successResponse(res, {
+    message: 'logged out successfully',
+    statusCode: 200,
+  });
+});
+router.delete('/remove-profilePic', authentication, async (req, res, next) => {
+  await removeProfilePicture(req.user);
+  return successResponse(res, {
+    message: 'picture removed',
+    statusCode: 200,
+  });
+});
+router.get(
+  '/visit-count/:id',
+  authentication,
+  authorization(['admin']),
+  Validation(getVisitCountValidation),
+  async (req, res, next) => {
+    const visitCount = await getViewCount(req.params.id);
+    return successResponse(res, {
+      message: 'done',
+      statusCode: 200,
+      data: { visitCount },
+    });
+  },
+);
+router.patch(
+  '/cover-pics',
+  fileUploader_cloudinary().array('cover', 2),
+  Validation(coverPicsValidation),
+  authentication,
+  async (req, res, next) => {
+    await uploadCoverPics(req);
+    return successResponse(res, {
+      message: 'done',
+      statusCode: 200,
     });
   },
 );

@@ -7,6 +7,8 @@ export const hash = async (password, algo = 'bcrypt') => {
   switch (algo) {
     case 'bcrypt':
       const salt = env.SALT;
+
+      
       result = await bcryptHash(password, salt);
       break;
     case 'argon':

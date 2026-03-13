@@ -1,8 +1,8 @@
 import { env } from '../../config/index.js';
-import { dbService, OTP, USER } from '../../DB/index.js';
-import jwt from 'jsonwebtoken';
+import { dbService, redis_client, USER } from '../../DB/index.js';
 import {
   ApiError,
+  asymmetric,
   hashSecurity,
   mailService,
   otpTypes,
@@ -10,47 +10,45 @@ import {
   provider,
 } from '../../utils/index.js';
 import { OAuth2Client } from 'google-auth-library';
-import path from 'path';
-import { unlink } from 'fs/promises';
+
 import cloudinary from '../../utils/cloudinary/cloudinary.js';
 import {
   Decryption,
   Encryption,
 } from '../../utils/security/asymmetricEncryption.security.js';
-
+import { randomUUID } from 'crypto';
+import {
+  deleteKey,
+  getRevokeTokenKey,
+  getValue,
+  revokedKey,
+  setValue,
+} from '../../DB/redis/redis.service.js';
 
 export const signup = async (req) => {
   const { firstName, lastName, email, password, phone } = req.body;
-
   const exists = await dbService.findOneDoc(USER, { filter: { email } });
-  console.log(email, exists);
-
   if (exists) {
     throw new ApiError('this email already exists', 409);
   }
-  const expireTime = new Date(Date.now() + 10 * 60 * 1000);
-
-  const otp = Math.floor(100000 + Math.random() * 900000);
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
   console.log('otp : ', otp);
-
-  //el hash by7sl f el pre save w el encryption by7sl f el phone f el pre save
-  const user = await dbService.createDoc(USER, {
-    data: {
+  const hashedOTP = await hashSecurity.hash(otp, 'bcrypt');
+  await setValue({
+    key: `create::${email}`,
+    value: {
       firstName,
       lastName,
       email,
       password,
       phone,
-      expireAt: expireTime,
     },
+    ttl: 300,
   });
-  await dbService.createDoc(OTP, {
-    data: {
-      otpType: otpTypes.confirmEmail,
-      otp,
-      userId: user._id,
-      expireAt: expireTime,
-    },
+  await setValue({
+    key: `otp::${email}`,
+    value: hashedOTP,
+    ttl: 300,
   });
   await mailService.sendOTP(
     email,
@@ -61,40 +59,32 @@ export const signup = async (req) => {
 };
 export const confirmAccount = async (data) => {
   const { email, otp } = data;
-  const user = await dbService.findOneDoc(USER, { filter: { email } });
-  if (!user) {
-    throw new ApiError('email not found', 404);
+  const user = await getValue(`create::${email}`);
+  const hashedOTP = await getValue(`otp::${email}`);
+  if (!hashedOTP || !user) {
+    throw new ApiError('OTP expired ', 400);
   }
-  const otpDoc = await dbService.findOneDoc(OTP, {
-    filter: { userId: user._id, otpType: otpTypes.confirmEmail },
-  });
-  if (!otpDoc) {
+  const isValid = await hashSecurity.checkHash(
+    otp.toString(),
+    hashedOTP,
+    'bcrypt',
+  );
+  if (!isValid) {
     throw new ApiError('invalid OTP ', 400);
   }
-  const decryptedOTP = await hashSecurity.checkHash(otp, otpDoc.otp, 'bcrypt');
-  if (!decryptedOTP) {
-    throw new ApiError('invalid OTP ', 400);
-  }
-  await dbService.deleteOneDoc(OTP, { filter: { _id: otpDoc._id } });
-  await dbService.updateOneDoc(USER, {
-    filter: { _id: user._id },
-    update: {
-      isConfirmed: true,
-      $unset: { expireAt: '' },
-    },
+  await dbService.createDoc(USER, {
+    data: user,
   });
+  await deleteKey(`otp::${email}`);
+  await deleteKey(`create::${email}`);
 };
 export const login = async (data) => {
   const { email, password } = data;
-
   const user = await dbService.findOneDoc(USER, {
     filter: { email, password: { $exists: 1 } },
   });
   if (!user) {
     throw new ApiError('invalid email or password', 401);
-  }
-  if (!user.isConfirmed) {
-    throw new ApiError('please confirm your email first', 403);
   }
   const checkPassword = await hashSecurity.checkHash(
     password,
@@ -104,8 +94,9 @@ export const login = async (data) => {
   if (!checkPassword) {
     throw new ApiError('invalid email or password', 401);
   }
-  const accessToken = await user.generateToken('access');
-  const refreshToken = await user.generateToken('refresh');
+  const tokenId = randomUUID();
+  const accessToken = await user.generateToken('access', tokenId);
+  const refreshToken = await user.generateToken('refresh', tokenId);
   return { accessToken, refreshToken };
 };
 const verifyGmail = async (idToken) => {
@@ -128,10 +119,12 @@ export const GmailSignUp = async ({ idToken }) => {
       email,
     },
   });
+  const tokenId = randomUUID();
   if (chkEmail) {
     if (chkEmail.provider === provider.google) {
-      const token = await chkEmail.generateToken();
-      return { token, created: false };
+      const accessToken = await chkEmail.generateToken('access', tokenId);
+      const refreshToken = await chkEmail.generateToken('refresh', tokenId);
+      return { accessToken, refreshToken, created: false };
     }
     throw new ApiError('please login with email and password', 400);
   }
@@ -144,26 +137,11 @@ export const GmailSignUp = async ({ idToken }) => {
       profilePic: picture,
     },
   });
-  const token = await newUser.generateToken();
-  return { token, created: true };
-};
-// export const uploadPic = async (req) => {
-//   if (req.user.profilePic) {
-//     try {
-//       const url = new URL(req.user.profilePic);
-//       const pathname = url.pathname;
-//       const filePath = path.join(process.cwd(), pathname);
-//       await unlink(filePath);
-//     } catch (e) {
-//       console.log('file already deleted skip.....');
-//     }
-//   }
 
-//   let profilePic = `${req.protocol}://${req.host}/${req.file.destination}/${req.file.filename}`;
-//   req.user.profilePic = profilePic;
-//   await req.user.save();
-//   return;
-// };
+  const accessToken = await newUser.generateToken('access', tokenId);
+  const refreshToken = await newUser.generateToken('refresh', tokenId);
+  return { accessToken, refreshToken, created: true };
+};
 export const uploadPic = async (req) => {
   const { public_id, secure_url } = await cloudinary.uploader.upload(
     req.file.path,
@@ -174,7 +152,21 @@ export const uploadPic = async (req) => {
     },
   );
   if (req.user.profilePic?.public_id) {
-    await cloudinary.uploader.destroy(req.user.profilePic.public_id);
+    const galleryPic = await cloudinary.uploader.upload(
+      req.user.profilePic.secure_url,
+      {
+        folder: 'gallery',
+        public_id: req.user.profilePic.public_id.split('/')[1],
+        use_filename: true,
+      },
+    );
+    const result = await cloudinary.uploader.destroy(
+      req.user.profilePic.public_id,
+    );
+    req.user.gallery.push({
+      public_id: galleryPic.public_id,
+      secure_url: galleryPic.secure_url,
+    });
   }
   req.file.profilePicId = public_id;
   req.user.profilePic = {
@@ -183,15 +175,14 @@ export const uploadPic = async (req) => {
   };
   await req.user.save();
 };
-export const refreshToken = async ({ refreshToken }) => {
-  const payload = await jwt.verify(refreshToken, env.REFRESH_TOKEN_SECRET);
+export const refreshToken = async ({ decoded }) => {
   const user = await dbService.findOneDoc(USER, {
-    filter: { _id: payload.id },
+    filter: { _id: decoded.id },
   });
   if (!user) {
     throw new ApiError('invalid refresh token', 401);
   }
-  const accessToken = await user.generateToken('access');
+  const accessToken = await user.generateToken('access', decoded.jti);
   return accessToken;
 };
 export const shareProfile = async (userId) => {
@@ -204,32 +195,47 @@ export const shareProfile = async (userId) => {
       'email',
       'phone',
       'profilePic',
+      'visitCount',
     ],
   });
   if (!user) {
     throw new ApiError('user not found', 404);
   }
-  user.phone = await Decryption(user.phone);
-  return user;
+  await dbService.updateOneDoc(USER, {
+    filter: { _id: userId },
+    update: { $inc: { visitCount: 1 } },
+  });
+  const userObj = user.toObject();
+  userObj.phone = await Decryption(userObj.phone);
+  delete userObj.visitCount;
+  return userObj;
 };
-
 export const updateProfile = async (req) => {
-  USER.updateOne({}, {}, {});
-  const user = await dbService.updateOneDoc(USER, {
+  await dbService.updateOneDoc(USER, {
     filter: { _id: req.user._id },
     update: {
       ...req.body,
-      phone: req.body.phone ? await Encryption(req.body.phone) : undefined,
+      phone: req.body.phone
+        ? await asymmetric.Encryption(req.body.phone)
+        : undefined,
     },
   });
-  if (!user) {
-    throw new ApiError('user not found', 404);
-  }
-  return user;
+  const user = await dbService.findDocById(USER, {
+    id: req.user._id,
+    select: ['-__v', '-createdAt', '-updatedAt', '-password'],
+  });
+  user.phone = await asymmetric.Decryption(user.phone);
+  const userObj = user.toObject();
+  delete userObj.visitCount;
+  delete userObj.password;
+  await setValue({
+    key: `profile::${user.id}`,
+    value: userObj,
+    ttl: 120,
+  });
 };
 export const updatePassword = async (req) => {
   const { currentPassword, newPassword, confirmPassword } = req.body;
-  console.log(req.user);
 
   const chkPassword = await hashSecurity.checkHash(
     currentPassword,
@@ -243,5 +249,74 @@ export const updatePassword = async (req) => {
     throw new ApiError('new password and confirm password do not match', 400);
   }
   req.user.password = newPassword;
+  await req.user.save();
+};
+export const logout = async ({ user, query, decoded }) => {
+  const { flag } = query;
+  if (flag === 'all') {
+    user.changeCredentials = Date.now();
+    await user.save();
+    await deleteKey(await redis_client.keys(getRevokeTokenKey(user._id)));
+    return;
+  }
+  await setValue({
+    key: revokedKey({ userId: user.id, jti: decoded.jti }),
+    value: `${decoded.jti}`,
+    ttl: decoded.exp - Math.floor(Date.now() / 1000),
+  });
+};
+export const userProfile = async (user) => {
+  const exist = await getValue(`profile::${user.id}`);
+  if (exist) {
+    console.log('data from here');
+    return exist;
+  }
+  const userObj = user.toObject();
+  delete userObj.visitCount;
+  delete userObj.password;
+  await setValue({
+    key: `profile::${user.id}`,
+    value: userObj,
+    ttl: 120,
+  });
+  return userObj;
+};
+export const removeProfilePicture = async (user) => {
+  await cloudinary.uploader.destroy(user.profilePic.public_id);
+  user.profilePic = undefined;
+  await user.save();
+  //unlink for HD
+};
+export const getViewCount = async (userId) => {
+  const visitCount = await dbService.findDocById(USER, {
+    id: userId,
+    select: ['visitCount', 'firstName', 'lastName'],
+  });
+  if (!visitCount) {
+    throw new ApiError('user not found', 404);
+  }
+  return visitCount;
+};
+export const uploadCoverPics = async (req) => {
+  const numOfFiles = req.files?.length;
+  const coverPicsCount = req.user.coverPics?.length || 0;
+
+  if (coverPicsCount + numOfFiles !== 2) {
+    throw new ApiError(
+      'Total number of cover pictures must equal exactly 2',
+      400,
+    );
+  }
+
+  for (const file of req.files) {
+    const { public_id, secure_url } = await cloudinary.uploader.upload(
+      file.path,
+      {
+        folder: 'coverPics',
+      },
+    );
+    req.user.coverPics.push({ public_id, secure_url });
+  }
+
   await req.user.save();
 };

@@ -16,3 +16,6 @@ export const updateOneDoc = async (
 ) => {
   return await model.updateOne(filter, update, options);
 };
+export const deleteManyDocs = async (model, { filter = {}, options }) => {
+  return await model.deleteMany(filter, options);
+};
